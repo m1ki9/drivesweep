@@ -1,0 +1,990 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DriveSweep</title>
+<style>
+:root {
+  --bg: #f4f6fa; --panel: #ffffff; --panel-2: #f8fafc; --line: #e3e8ef; --text: #0f172a; --muted: #64748b;
+  --accent: #2563eb; --accent-soft: #dbe7ff; --danger: #dc2626; --danger-soft: #fde2e2;
+  --safe: #15803d; --safe-soft: #dcfce7; --warn: #b45309; --warn-soft: #fef3c7; --bar: #e2e8f0;
+  --shadow: 0 1px 2px rgba(15,23,42,.06), 0 4px 16px rgba(15,23,42,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel-2: #1c222b; --line: #2a313c; --text: #e6edf3; --muted: #8b95a3;
+    --accent: #4c8dff; --accent-soft: #16294a; --danger: #f05252; --danger-soft: #3b1618;
+    --safe: #3fb950; --safe-soft: #12301b; --warn: #e3a336; --warn-soft: #3a2a0c; --bar: #2a313c;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+  }
+}
+:root {
+  --heat-1: var(--accent); --heat-2: #eab308; --heat-3: #f97316; --heat-4: var(--danger); --folder: #e8a33d;
+  --brand: linear-gradient(135deg, #e8a33d, #f97316 55%, #ef4444);
+  --spectrum: linear-gradient(90deg, var(--accent), #eab308, #f97316, var(--danger), var(--accent));
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+button { font: inherit; color: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 7px 14px; }
+button:hover { border-color: var(--muted); }
+button:disabled { opacity: .45; cursor: default; }
+button { transition: background .15s, border-color .15s, color .15s, filter .15s, transform .06s; }
+button:active:not(:disabled) { transform: scale(.97); }
+button:focus-visible { outline: 2px solid var(--heat-3); outline-offset: 2px; }
+/* solid = the main action; soft = the same action on a single row. Blue = go/move, red = delete. */
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button.danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+button.primary:hover:not(:disabled), button.danger:hover:not(:disabled) { filter: brightness(1.12); }
+button.soft-accent, button.soft-danger { font-weight: 600; min-width: 64px; }
+button.soft-accent { background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--accent); }
+button.soft-danger { background: color-mix(in srgb, var(--danger) 12%, transparent); border-color: color-mix(in srgb, var(--danger) 35%, transparent); color: var(--danger); }
+button.soft-accent:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.soft-danger:hover:not(:disabled) { background: var(--danger); border-color: var(--danger); color: #fff; }
+button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+button.ghost:hover { color: var(--text); background: var(--panel-2); }
+button.small { padding: 4px 10px; font-size: 13px; }
+input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; margin: 0; flex: none; }
+input[type=search], select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
+.muted { color: var(--muted); }
+.mono { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hidden { display: none !important; }
+
+.app { display: flex; flex-direction: column; height: 100%; }
+.top { display: flex; align-items: center; gap: 12px; padding: 12px 24px; border-bottom: 1px solid var(--line); background: var(--panel); flex: none; position: relative; }
+.top::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--spectrum); background-size: 200% 100%; animation: flow 8s linear infinite; }
+.drivepill { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 5px 12px 5px 8px; border-radius: 99px; background: var(--panel-2); border: 1px solid var(--line); }
+.drivepill .dot { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; color: #fff; }
+.drivepill .meter { width: 60px; height: 6px; border-radius: 99px; background: var(--bar); overflow: hidden; }
+.drivepill .meter i { display: block; height: 100%; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; }
+.brandlogo { width: 30px; height: 30px; filter: drop-shadow(0 2px 6px color-mix(in srgb, #f97316 40%, transparent)); }
+.dicon { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; flex: none; color: #fff; background: var(--brand); }
+@keyframes flow { to { background-position: -200% 0; } }
+.top .spacer { flex: 1; }
+.pill { font-size: 12px; padding: 3px 10px; border-radius: 99px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+main { flex: 1; overflow: auto; padding: 24px; padding-bottom: 110px; }
+.wrap { max-width: 1120px; margin: 0 auto; }
+h1 { font-size: 26px; margin: 8px 0 4px; letter-spacing: -.01em; }
+h2 { font-size: 17px; margin: 0; }
+
+/* drives */
+.drive-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-top: 24px; }
+.drive { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; box-shadow: var(--shadow); cursor: pointer; transition: transform .12s, border-color .12s; text-align: left; }
+.drive:hover { transform: translateY(-2px); border-color: var(--accent); }
+.drive .head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.drive .name { font-weight: 650; font-size: 16px; }
+.usage { height: 10px; border-radius: 99px; background: var(--bar); overflow: hidden; position: relative; }
+.usage > i { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 99px; transition: width .3s, background .3s; }
+.usage > b { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, var(--safe), var(--safe) 5px, color-mix(in srgb, var(--safe) 70%, transparent) 5px, color-mix(in srgb, var(--safe) 70%, transparent) 10px); transition: left .2s, width .2s; }
+.drive .nums { display: flex; justify-content: space-between; margin-top: 10px; color: var(--muted); font-size: 13px; }
+.drive .go { margin-top: 16px; width: 100%; }
+
+/* scan */
+.scan-box { max-width: 560px; margin: 12vh auto 0; text-align: center; }
+.big { font-size: 48px; font-weight: 700; letter-spacing: -.02em; }
+.dstate { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12px; color: var(--muted); min-height: 18px; }
+.dstate .led { width: 8px; height: 8px; border-radius: 50%; background: var(--bar); flex: none; }
+.dstate.ready .led { background: var(--safe); box-shadow: 0 0 0 3px color-mix(in srgb, var(--safe) 25%, transparent); }
+.dstate.busy .led { background: var(--heat-2); animation: blink 1s ease-in-out infinite; }
+.dstate .mini { flex: 1; height: 4px; border-radius: 99px; background: var(--bar); overflow: hidden; }
+.dstate .mini i { display: block; height: 100%; background: var(--spectrum); background-size: 200% 100%; animation: flow 2.5s linear infinite; transition: width .5s; }
+@keyframes blink { 50% { opacity: .35; } }
+
+/* job progress (deleting, moving) */
+.jobhead { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.pct { font-size: 34px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.grad { background: var(--spectrum); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: flow 3s linear infinite; }
+.jobbar { position: relative; height: 14px; border-radius: 99px; background: var(--bar); overflow: hidden; margin: 14px 0 10px; }
+.jobbar i { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 99px; background: var(--spectrum); background-size: 200% 100%; animation: flow 2s linear infinite; transition: width .35s ease; }
+.jobbar i::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, rgba(255,255,255,.22) 0 8px, transparent 8px 16px); background-size: 22.6px 22.6px; animation: stripes .6s linear infinite; }
+@keyframes stripes { to { background-position: 22.6px 0; } }
+.lane { display: flex; align-items: center; margin: 22px 0 8px; }
+.dtile { width: 86px; height: 86px; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-weight: 800; color: #fff; flex: none; }
+.dtile svg { width: 30px; height: 30px; }
+.dtile.src { background: linear-gradient(135deg, #f97316, #ef4444); }
+.dtile.dst { background: linear-gradient(135deg, var(--accent), #22c55e); animation: glow 1.4s ease-in-out infinite; }
+@keyframes glow { 50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 25%, transparent), 0 0 30px color-mix(in srgb, #22c55e 45%, transparent); } }
+.track { position: relative; flex: 1; height: 86px; margin: 0 10px; overflow: hidden; }
+.track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 2px dashed var(--line); }
+.fly { position: absolute; top: calc(50% + var(--y)); left: -24px; margin-top: -11px; display: flex; animation: fly 1.7s cubic-bezier(.45,.05,.55,.95) var(--d) infinite; opacity: 0; }
+.fly svg { width: 22px; height: 22px; filter: drop-shadow(0 0 6px currentColor); }
+@keyframes fly { 0% { left: -24px; opacity: 0; transform: scale(.5) rotate(-15deg); } 15% { opacity: 1; }
+  50% { transform: translateY(-16px) scale(1.15) rotate(0); } 85% { opacity: 1; } 100% { left: 100%; opacity: 0; transform: scale(.5) rotate(15deg); } }
+.lane.removing .dtile.src { animation: shrink 1s ease-in-out infinite; }
+.lane.removing .fly { animation-name: poof; left: 0; }
+@keyframes poof { 0% { left: 0; opacity: 0; transform: scale(.4); } 30% { opacity: 1; } 100% { left: 30%; opacity: 0; transform: translateY(-30px) scale(1.6) rotate(40deg); } }
+@keyframes shrink { 50% { transform: scale(.92); filter: saturate(.6); } }
+.scan-box .mono { margin: 10px 0 24px; min-height: 18px; }
+
+/* drive dashboard */
+.summary { display: grid; grid-template-columns: 1fr auto; gap: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px 24px; box-shadow: var(--shadow); align-items: center; }
+.summary .usage { height: 14px; margin: 12px 0 8px; }
+.legend { display: flex; gap: 18px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+.legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 6px; background: var(--c); }
+.stats { display: flex; gap: 28px; }
+.stat .v { font-size: 22px; font-weight: 700; }
+.stat .l { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.stat.good .v { color: var(--safe); }
+.tabs { display: flex; gap: 4px; margin: 20px 0 16px; border-bottom: 1px solid var(--line); }
+.tab { border: none; background: none; border-radius: 0; padding: 10px 14px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 550; }
+.tab:hover { color: var(--text); }
+.tab.on { color: var(--text); border-image: var(--spectrum) 1; border-bottom-width: 3px; }
+.tab .count { font-size: 12px; margin-left: 6px; padding: 1px 7px; border-radius: 99px; background: var(--panel-2); color: var(--muted); }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 14px; box-shadow: var(--shadow); overflow: hidden; }
+.card-head { display: flex; align-items: center; gap: 14px; padding: 14px 18px; cursor: pointer; user-select: none; }
+.card-head .ico { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; flex: none;
+  --c: var(--accent); background: color-mix(in srgb, var(--c) 16%, transparent); color: var(--c); }
+.card-head .t { flex: 1; min-width: 0; }
+.card-head .sz { font-weight: 700; font-size: 16px; white-space: nowrap; }
+.chev { transition: transform .15s; color: var(--muted); }
+.card.open .chev { transform: rotate(90deg); }
+.card-body { display: none; border-top: 1px solid var(--line); }
+.card.open .card-body { display: block; }
+
+.row { display: flex; align-items: center; gap: 12px; padding: 9px 18px; border-bottom: 1px solid var(--line); min-height: 50px; }
+.row:last-child { border-bottom: none; }
+.row:hover { background: var(--panel-2); }
+.row .main { flex: 1; min-width: 0; }
+.row .title { font-weight: 550; }
+.row .sub { font-size: 12px; color: var(--muted); }
+.row .when { width: 150px; font-size: 13px; color: var(--muted); text-align: right; flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .size { width: 90px; text-align: right; font-weight: 650; flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.row .acts { display: flex; gap: 4px; flex: none; width: 40px; justify-content: flex-end; }
+.row .acts.wide { width: 204px; }
+.row .acts.mid { width: 70px; }
+.pick { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.pick label { flex: 1; min-width: 150px; display: flex; gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; }
+.pick label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.row .title { display: flex; align-items: center; min-width: 0; }
+.row .title .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.row .title .badges { flex: none; }
+.row.dim { opacity: .55; }
+.row .click { cursor: pointer; }
+.row .click:hover .title { color: var(--accent); text-decoration: underline; }
+.badges { display: inline-flex; gap: 5px; margin-left: 8px; vertical-align: 1px; }
+.badge { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; padding: 1px 7px; border-radius: 99px; font-weight: 600; background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
+.badge.safe { background: var(--safe-soft); color: var(--safe); border-color: transparent; }
+.badge.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.badge.danger { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+/* explore tree */
+.tree .thead, .tree .trow { display: grid; grid-template-columns: 22px minmax(0, 1fr) 200px 84px 80px 110px 64px; align-items: center; gap: 12px; padding: 0 16px; }
+.tree .thead { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding-top: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+.tree .trow { min-height: 40px; border-bottom: 1px solid var(--line); }
+.tree .trow:last-child { border-bottom: none; }
+.tree .trow:hover { background: var(--panel-2); }
+.tree .trow.dir { cursor: pointer; }
+.tree .trow.dir:hover .name { color: var(--accent); }
+.tree .trow.dim { opacity: .55; }
+.tc { display: flex; }
+.tname { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.tname .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 48px; flex: 0 1 auto; font-weight: 550; }
+.tname .badges { flex: 0 1000 auto; min-width: 0; overflow: hidden; margin-left: 4px; }
+.twist { width: 18px; height: 18px; display: grid; place-items: center; flex: none; color: var(--muted); border-radius: 4px; }
+.trow.dir:hover .twist { background: var(--line); color: var(--text); }
+.twist .chev { transition: transform .12s; }
+.twist.open .chev { transform: rotate(90deg); }
+.twist.loading .chev { animation: spin .8s linear infinite; }
+.ticon { display: flex; flex: none; }
+.tbar { position: relative; height: 18px; border-radius: 5px; background: var(--bar); overflow: hidden; }
+.tbar i { position: absolute; inset: 0 auto 0 0; border-radius: 5px; }
+.tbar span { position: absolute; right: 7px; top: 0; line-height: 18px; font-size: 11px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.tnum { text-align: right; font-size: 13px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tree .acts { display: flex; gap: 2px; justify-content: flex-end; }
+.tree .acts button { padding: 4px 6px; }
+.tree .size { text-align: right; font-weight: 650; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.more { padding: 10px 18px; }
+.toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+.toolbar .grow { flex: 1; }
+.notice { padding: 12px 16px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); margin-bottom: 14px; font-size: 13px; }
+.crumbs { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; }
+.crumbs button { padding: 4px 8px; }
+.avatar { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-weight: 700; color: #fff; flex: none; font-size: 13px; }
+img.avatar { object-fit: contain; background: var(--panel-2); padding: 3px; }
+.empty { padding: 40px; text-align: center; color: var(--muted); }
+
+/* action bar */
+.actionbar { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 140%); transition: transform .2s; background: var(--text); color: var(--bg); border-radius: 14px; padding: 10px 10px 10px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 10px 40px rgba(0,0,0,.3); min-width: 520px; }
+.actionbar.show { transform: translate(-50%, 0); }
+.actionbar .info { flex: 1; }
+.actionbar .info b { font-size: 16px; }
+.actionbar button.ghost { color: inherit; opacity: .7; }
+.actionbar button.ghost:hover { background: transparent; opacity: 1; }
+
+/* dialogs */
+.dlg-body h2 { font-size: 20px; }
+dialog { outline: none; border: 1px solid var(--line); border-radius: 16px; padding: 0; width: min(620px, 92vw); background: var(--panel); color: var(--text); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+dialog::backdrop { background: rgba(10,15,25,.55); }
+.dlg-body { padding: 24px 26px 8px; max-height: 70vh; overflow: auto; }
+.dlg-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 26px 22px; }
+.dlg-list { border: 1px solid var(--line); border-radius: 10px; margin: 14px 0; max-height: 280px; overflow: auto; }
+.dlg-list .row { min-height: 40px; padding: 7px 14px; }
+.warnbox { background: var(--warn-soft); color: var(--warn); border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-top: 10px; }
+.warnbox .mono { color: inherit; opacity: .85; }
+.spinner { width: 42px; height: 42px; border-radius: 50%; margin: 8px auto 16px; animation: spin .9s linear infinite;
+  background: conic-gradient(from 0deg, transparent 10%, var(--accent), #eab308, #f97316, var(--danger));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px)); }
+@keyframes spin { to { transform: rotate(360deg); } }
+.center { text-align: center; }
+details summary { cursor: pointer; color: var(--muted); margin: 10px 0; outline: none; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <button class="ghost hidden" id="back" title="Back to drives">&larr; Drives</button>
+    <div class="brand"><img class="brandlogo" src="logo.png" alt="">DriveSweep</div>
+    <div class="spacer"></div>
+    <button class="drivepill hidden" id="drivePill" title="Pick another drive"></button>
+    <span class="pill warn hidden" id="notAdmin" title="Some folders can't be cleaned and app 'last used' dates are unknown">Not running as administrator</span>
+  </header>
+
+  <main>
+    <!-- 1. pick a drive -->
+    <section class="wrap" id="v-drives">
+      <h1>Which drive do you want to clean?</h1>
+      <div class="muted">DriveSweep scans the drive, then shows what's taking space and what you can safely delete.</div>
+      <div class="drive-grid" id="driveGrid"></div>
+    </section>
+
+    <!-- 2. scanning -->
+    <section class="wrap hidden" id="v-scan">
+      <div class="scan-box">
+        <div class="muted" id="scanTitle">Scanning</div>
+        <div class="big" id="scanPct">0%</div>
+        <div class="jobbar"><i id="scanBar"></i></div>
+        <div id="scanNums" class="muted">Starting...</div>
+        <div class="mono muted ellipsis" id="scanPath"></div>
+        <button id="cancelScan">Cancel</button>
+      </div>
+    </section>
+
+    <!-- 3. results -->
+    <section class="wrap hidden" id="v-drive">
+      <div class="summary">
+        <div>
+          <h2 id="dName"></h2>
+          <div class="usage" id="dUsage"><i></i><b></b></div>
+          <div class="legend">
+            <span style="--c: var(--accent)" id="legendUsed">Used</span>
+            <span style="--c: var(--safe)">Selected to free</span>
+            <span style="--c: var(--bar)">Free</span>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="v" id="dFree"></div><div class="l">Free now</div></div>
+          <div class="stat good"><div class="v" id="dCan"></div><div class="l">Can be freed</div></div>
+        </div>
+      </div>
+
+      <nav class="tabs" id="tabs">
+        <button class="tab on" data-tab="rec">Recommended<span class="count" id="cRec"></span></button>
+        <button class="tab" data-tab="apps">Apps<span class="count" id="cApps"></span></button>
+        <button class="tab" data-tab="cache">Cache &amp; temp<span class="count" id="cCache"></span></button>
+        <button class="tab" data-tab="explore">Explore folders</button>
+        <div style="flex:1"></div>
+        <button class="ghost small" id="rescan" title="Scan this drive again">&#8635; Rescan</button>
+      </nav>
+
+      <div id="tab-rec"></div>
+      <div id="tab-apps" class="hidden"></div>
+      <div id="tab-cache" class="hidden"></div>
+      <div id="tab-explore" class="hidden"></div>
+    </section>
+  </main>
+</div>
+
+<div class="actionbar" id="actionbar">
+  <div class="info"><b id="selSize"></b> <span id="selCount" style="opacity:.75"></span></div>
+  <button class="ghost" id="selClear">Clear selection</button>
+  <button class="danger" id="selGo">Delete permanently</button>
+</div>
+
+<dialog id="dlg"><div id="dlgContent"></div></dialog>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const api = () => window.pywebview.api;
+const DAY = 86400;
+const state = { icons: {}, drive: null, data: null, tab: "rec", explorePath: null, appSort: "size", appQuery: "", firstLoad: true };
+const sel = new Map();        // key -> item {key, action, path?, id?, title, size}
+let known = new Map();        // key -> item, for everything currently rendered
+
+// ---------- formatting ----------
+function size(b) {
+  if (!b) return "0 B";
+  const u = ["B", "KB", "MB", "GB", "TB"]; let i = 0;
+  while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+  return (i >= 3 ? b.toFixed(1) : Math.round(b)) + " " + u[i];
+}
+function ago(ts) {
+  if (!ts) return "";
+  const d = (Date.now() / 1000 - ts) / DAY;
+  if (d < 1) return "today";
+  if (d < 2) return "yesterday";
+  if (d < 60) return Math.floor(d) + " days ago";
+  if (d < 730) return Math.floor(d / 30) + " months ago";
+  return Math.floor(d / 365) + " years ago";
+}
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const color = (s) => `hsl(${[...s].reduce((a, c) => a + c.charCodeAt(0), 0) * 37 % 360} 55% 48%)`;
+const ICON = {
+  folder: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  file: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg>',
+  drive: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 15h.01M11 15h6"/></svg>',
+  chev: '<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 6 6 6-6 6"/></svg>',
+  enter: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>',
+  open: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
+  broom: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m19 3-7 7M9 11l4 4M4 20c0-4 2-8 5-9l4 4c-1 3-5 5-9 5z"/></svg>',
+  app: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+  game: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.3 5H6.7a4 4 0 0 0-4 3.6l-.6 5.9A2.8 2.8 0 0 0 7 16.9L9 15h6l2 1.9a2.8 2.8 0 0 0 4.9-2.4l-.6-5.9A4 4 0 0 0 17.3 5z"/></svg>',
+  clock: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  box: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg>',
+  win: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5 10 4.5v7H3zM11 4.3 21 3v8.5H11zM3 12.5h7v7l-7-1zM11 12.5h10V21l-10-1.4z"/></svg>',
+  alert: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></svg>',
+};
+
+// ---------- views ----------
+function show(view) {
+  for (const v of ["drives", "scan", "drive"]) $("#v-" + v).classList.toggle("hidden", v !== view);
+  $("#back").classList.toggle("hidden", view === "drives");
+  if (view !== "drive") $("#drivePill").classList.add("hidden");
+  if (view !== "drive") { sel.clear(); updateBar(); }
+}
+
+function fullness(pct) {  // same colors as the folder tree: blue → yellow → orange → red
+  return pct >= 90 ? "var(--heat-4)" : pct >= 75 ? "var(--heat-3)" : pct >= 60 ? "var(--heat-2)" : "var(--heat-1)";
+}
+let drivesList = [];
+async function loadDrives() {
+  show("drives");
+  api().prescan();  // scan every drive in the background, so opening one is instant
+  drivesList = await api().drives();
+  $("#driveGrid").innerHTML = drivesList.map((d) => {
+    const pct = d.used / d.total * 100;
+    return `<div class="drive" data-drive="${esc(d.path)}">
+      <div class="head"><div class="dicon" style="background:linear-gradient(135deg, ${fullness(pct)}, color-mix(in srgb, ${fullness(pct)} 55%, #000))">${ICON.drive}</div>
+        <div><div class="name">${esc(d.label)} (${esc(d.path.replace("\\", ""))})</div><div class="muted" style="font-size:13px">${d.system ? "Windows drive" : "Storage drive"}</div></div></div>
+      <div class="usage"><i style="width:${pct}%;background:${fullness(pct)}"></i></div>
+      <div class="nums"><span><b style="color:var(--text)">${size(d.free)}</b> free of ${size(d.total)}</span><span style="color:${fullness(pct)};font-weight:700">${Math.round(pct)}% used</span></div>
+      <div class="dstate" data-state="${esc(d.path)}"><span class="led"></span><span class="txt">Waiting to scan</span></div>
+      <button class="primary go">Scan &amp; clean</button></div>`;
+  }).join("");
+  pollDrives();
+}
+async function pollDrives() {
+  if ($("#v-drives").classList.contains("hidden")) return;
+  const states = await api().drive_states();
+  for (const d of drivesList) {
+    const box = document.querySelector(`[data-state="${CSS.escape(d.path)}"]`);
+    if (!box) continue;
+    const st = states[d.path.slice(0, 2).toUpperCase() + "\\"];
+    const pct = st ? Math.min(99, Math.floor(st.bytes / Math.max(1, d.used) * 100)) : 0;
+    const ready = st && st.state === "done";
+    box.className = "dstate " + (ready ? "ready" : st ? "busy" : "");
+    box.innerHTML = ready ? ""
+      : st && st.state === "apps" ? '<span class="led"></span><span>Almost ready...</span>'
+      : st ? `<span class="led"></span><span>Scanning in the background ${pct}%</span><span class="mini"><i style="width:${pct}%"></i></span>`
+      : '<span class="led"></span><span>Waiting to scan</span>';
+    box.nextElementSibling.textContent = ready ? "Open" : "Scan & clean";
+  }
+  setTimeout(pollDrives, 700);
+}
+
+$("#driveGrid").addEventListener("click", (e) => {
+  const card = e.target.closest(".drive");
+  if (card) startScan(card.dataset.drive);
+});
+$("#back").onclick = () => loadDrives();  // background scans keep going
+$("#drivePill").onclick = () => loadDrives();
+
+async function startScan(drive, fresh = false) {
+  state.drive = drive;
+  state.explorePath = drive;
+  tree.open.clear(); tree.cache.clear(); tree.limit.clear();
+  state.firstLoad = true;
+  state.icons = {};
+  sel.clear();
+  await api().start_scan(drive, fresh);
+  if ((await api().scan_status()).state === "done") return loadOverview();
+  show("scan");
+  $("#scanTitle").textContent = "Scanning " + drive.replace("\\", "");
+  $("#scanPct").textContent = "0%"; $("#scanBar").style.width = "0";
+  $("#scanNums").textContent = "Starting..."; $("#scanPath").textContent = "";
+  pollScan();
+}
+async function pollScan() {
+  const s = await api().scan_status();
+  if (s.state === "cancelled") return loadDrives();
+  if (s.state === "done") return loadOverview();
+  const pct = Math.min(99, Math.floor(s.bytes / Math.max(1, s.drive.used) * 100));
+  $("#scanPct").textContent = pct + "%";
+  $("#scanPct").classList.add("grad");
+  $("#scanBar").style.width = pct + "%";
+  $("#scanNums").textContent = s.state === "apps" ? s.phase : `${s.files.toLocaleString()} files · ${size(s.bytes)} checked`;
+  $("#scanPath").textContent = s.current;
+  setTimeout(pollScan, 250);
+}
+$("#cancelScan").onclick = () => api().cancel_scan();
+$("#rescan").onclick = () => startScan(state.drive, true);
+
+async function loadOverview() {
+  const d = await api().overview();
+  state.data = d;
+  $("#notAdmin").classList.toggle("hidden", d.admin);
+  if (state.firstLoad) {  // pre-select everything that is safe
+    state.firstLoad = false;
+    for (const s of d.suggestions) if (s.risk === "safe") { const it = sugItem(s); sel.set(it.key, it); }
+  }
+  show("drive");
+  renderAll();
+  if (!Object.keys(state.icons).length) api().icons().then((icons) => { state.icons = icons; renderApps(); renderRec(); });
+}
+
+function renderAll() {
+  known = new Map();
+  const d = state.data;
+  $("#dName").textContent = `${d.drive.label || "Local Disk"} (${d.drive.path.replace("\\", "")})`;
+  $("#dFree").textContent = size(d.drive.free);
+  const can = d.suggestions.reduce((a, s) => a + s.size, 0);
+  $("#dCan").textContent = size(can);
+  $("#cRec").textContent = size(can);
+  $("#cApps").textContent = d.apps.length;
+  $("#cCache").textContent = size(d.caches.reduce((a, c) => a + c.size, 0));
+  renderRec(); renderApps(); renderCache();
+  if (state.tab === "explore") loadExplore(state.explorePath);
+  updateBar();
+}
+
+$("#tabs").addEventListener("click", (e) => {
+  const t = e.target.closest(".tab");
+  if (!t) return;
+  state.tab = t.dataset.tab;
+  document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("on", x === t));
+  for (const n of ["rec", "apps", "cache", "explore"]) $("#tab-" + n).classList.toggle("hidden", n !== state.tab);
+  if (state.tab === "explore") loadExplore(state.explorePath || state.drive);
+});
+
+// ---------- items & selection ----------
+function sugItem(s) {
+  if (s.action === "clear") return { key: "c:" + s.id, action: "clear", id: s.id, title: s.title, size: s.size };
+  if (s.action === "recycle") return { key: "recycle", action: "recycle", title: "Empty Recycle Bin", size: s.size };
+  if (s.action === "hibernate") return { key: "hib", action: "hibernate", title: s.title, size: s.size };
+  if (s.action === "uninstall") return { key: "a:" + s.id, action: "uninstall", id: s.id, title: s.title, size: s.size };
+  return { key: "p:" + s.path.toLowerCase(), action: s.action, path: s.path, title: s.title, size: s.size };
+}
+function register(it) { known.set(it.key, it); return it.key; }
+function check(key) { return `<input type="checkbox" data-key="${esc(key)}" ${sel.has(key) ? "checked" : ""}>`; }
+
+function selectedTotal() {
+  const paths = [...sel.values()].filter((i) => i.path).map((i) => i.path.toLowerCase());
+  let total = 0;
+  for (const it of sel.values()) {
+    if (it.path) {  // don't count a path twice when its parent folder is also selected
+      const p = it.path.toLowerCase();
+      if (paths.some((q) => q !== p && p.startsWith(q.replace(/\\$/, "") + "\\"))) continue;
+    }
+    total += it.size || 0;
+  }
+  return total;
+}
+function updateBar() {
+  const n = sel.size, total = selectedTotal();
+  $("#actionbar").classList.toggle("show", n > 0);
+  $("#selSize").textContent = size(total) + " selected";
+  $("#selCount").textContent = `· ${n} item${n === 1 ? "" : "s"}`;
+  if (state.data) {
+    const d = state.data.drive;
+    const used = d.used / d.total * 100, freeing = Math.min(used, total / d.total * 100);
+    $("#dUsage i").style.width = used + "%";
+    $("#dUsage i").style.background = fullness(used);
+    $("#legendUsed").style.setProperty("--c", fullness(used));
+    $("#drivePill").classList.remove("hidden");
+    $("#drivePill").innerHTML = `<span class="dot" style="background:${fullness(used)}">${ICON.drive.replace('width="22" height="22"', 'width="14" height="14"')}</span>
+      ${esc(d.path.replace("\\", ""))} · ${size(d.free)} free<span class="meter"><i style="width:${used}%;background:${fullness(used)}"></i></span>`;
+    $("#dUsage b").style.left = (used - freeing) + "%";
+    $("#dUsage b").style.width = freeing + "%";
+  }
+  document.querySelectorAll(".card").forEach(syncGroupBox);
+}
+function syncGroupBox(card) {
+  const boxes = [...card.querySelectorAll(".card-body input[data-key]")];
+  const all = card.querySelector("input[data-group]");
+  if (!all || !boxes.length) return;
+  const on = boxes.filter((b) => b.checked).length;
+  all.checked = on === boxes.length; all.indeterminate = on > 0 && on < boxes.length;
+}
+document.addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.dataset.key) {
+    const it = known.get(t.dataset.key);
+    if (t.checked && it) sel.set(it.key, it); else sel.delete(t.dataset.key);
+    document.querySelectorAll(`input[data-key="${CSS.escape(t.dataset.key)}"]`).forEach((b) => b.checked = t.checked);
+    updateBar();
+  } else if (t.dataset.group) {
+    t.closest(".card").querySelectorAll(".card-body input[data-key]").forEach((b) => {
+      const it = known.get(b.dataset.key);
+      b.checked = t.checked;
+      if (t.checked && it) sel.set(it.key, it); else sel.delete(b.dataset.key);
+    });
+    updateBar();
+  }
+});
+$("#selClear").onclick = () => { sel.clear(); document.querySelectorAll("input[data-key]").forEach((b) => b.checked = false); updateBar(); };
+$("#selGo").onclick = () => confirmRun([...sel.values()]);
+document.addEventListener("click", (e) => {
+  const r = e.target.closest("[data-reveal]");
+  if (r) { e.stopPropagation(); api().reveal(r.dataset.reveal); }
+});
+
+// ---------- recommended ----------
+const GROUPS = [
+  ["cache", "Cache & temporary files", "Safe to delete. Apps and Windows rebuild these when needed.", "safe", ICON.broom],
+  ["junkfiles", "Crash dumps, logs & backup files", "Leftover files nobody reads. Hidden ones included.", "safe", ICON.file],
+  ["system", "Windows & temporary leftovers", "Files from past Windows upgrades, temporary folders installers left behind, and system features you can switch off.", "safe", ICON.win],
+  ["launcher", "Game launcher leftovers", "Files from games you uninstalled and old downloads that Steam itself no longer uses.", "safe", ICON.game],
+  ["games", "Games & programs you don't use anymore", "No installed program, launcher, shortcut or service uses these, and nothing in them has been opened in a long time.", "review", ICON.game],
+  ["installers", "Installers, setup files & disk images", "Game repacks, setup folders, ISOs and archives. Once something is installed, its installer isn't needed.", "review", ICON.box],
+  ["apps", "Apps you haven't used in 3+ months", "Deleting runs the app's own uninstaller, then offers to delete what it leaves behind.", "review", ICON.app],
+  ["leftover", "Leftovers from removed programs", "Settings and data folders from programs that are no longer installed.", "review", ICON.box],
+  ["downloads", "Old installers & archives in Downloads", "Setup files and zips you already used.", "review", ICON.file],
+  ["dupes", "Duplicate files", "Identical copies of the same file. The oldest copy is kept.", "review", ICON.file],
+  ["large", "Big files you haven't opened in 6+ months", "Your own files. Check them before deleting.", "review", ICON.clock],
+  ["old", "Folders untouched for over a year", "Nothing uses them and nothing inside has changed in a long time.", "review", ICON.folder],
+  ["personal", "Old photos, videos & documents", "Your own files that haven't changed in over a year. Only delete what you've backed up or don't want.", "review", ICON.clock],
+];
+const LAST_KIND = { opened: "Opened", changed: "Changed", used: "Last used" };  // what each date means
+const GROUP_COLOR = {
+  cache: "var(--heat-1)", junkfiles: "var(--heat-2)", system: "var(--heat-1)", launcher: "var(--heat-3)", games: "var(--heat-4)",
+  installers: "var(--heat-3)", apps: "var(--heat-2)", leftover: "var(--folder)", downloads: "var(--heat-1)", dupes: "var(--heat-2)",
+  large: "var(--heat-3)", old: "var(--folder)", personal: "var(--heat-1)",
+};
+const openGroups = new Set(["cache", "junkfiles", "system"]);
+const expanded = new Set();
+
+function badges(s) {
+  const b = [];
+  if (s.risk === "safe") b.push('<span class="badge safe">Safe</span>');
+  if (s.hidden) b.push('<span class="badge">Hidden</span>');
+  if (s.in_use && s.in_use.length) b.push(`<span class="badge warn" title="Running now">In use by ${esc(s.in_use[0])}</span>`);
+  return b.length ? `<span class="badges">${b.join("")}</span>` : "";
+}
+
+function renderRec() {
+  const list = state.data.suggestions;
+  if (!list.length) { $("#tab-rec").innerHTML = '<div class="card empty">Nothing to suggest on this drive. It\'s already clean.</div>'; return; }
+  const d = state.data;
+  const basis = d.remembers_since
+    ? `<div class="muted" style="font-size:13px;margin:-4px 0 12px">"Not opened" is based on Windows' own record of when each program was last started, which goes back to ${new Date(d.remembers_since * 1000).toLocaleDateString(undefined, { month: "long", year: "numeric" })}.</div>`
+    : `<div class="notice">${d.admin ? "Windows' record of when programs were last opened isn't available on this PC" : "Run DriveSweep as administrator so it can read when each program was last opened"}, so unused games and programs are judged by file dates only (a year without changes). ${d.admin ? "" : "You'll get more and better suggestions."}</div>`;
+  $("#tab-rec").innerHTML = basis + GROUPS.map(([g, title, desc, risk, icon]) => {
+    const items = list.filter((s) => s.group === g).sort((a, b) => b.size - a.size);
+    if (!items.length) return "";
+    const total = items.reduce((a, s) => a + s.size, 0);
+    const shown = expanded.has(g) ? items : items.slice(0, 8);
+    const rows = shown.map((s) => {
+      const key = register(sugItem(s));
+      const sub = s.path ? `<div class="sub mono ellipsis">${esc(s.path)}</div>` : "";
+      const reveal = s.path ? `<button class="ghost small" data-reveal="${esc(s.path)}" title="Show in File Explorer">${ICON.open}</button>` : "";
+      const app = s.action === "uninstall" ? state.data.apps.find((a) => a.id === s.id) : null;
+      return `<div class="row"><label style="display:flex">${check(key)}</label>${app ? avatar(app) : ""}
+        <div class="main"><div class="title"><span class="name">${esc(s.title)}</span>${badges(s)}</div><div class="sub">${esc(s.detail)}</div>${sub}</div>
+        <div class="when">${s.last_used ? LAST_KIND[s.last_kind || "changed"] + " " + ago(s.last_used) : ""}</div>
+        <div class="size">${size(s.size)}</div><div class="acts">${reveal}</div></div>`;
+    }).join("");
+    const more = items.length > shown.length ? `<div class="more"><button class="ghost small" data-expand="${g}">Show all ${items.length}</button></div>` : "";
+    return `<div class="card ${openGroups.has(g) ? "open" : ""}" data-g="${g}">
+      <div class="card-head"><input type="checkbox" data-group="${g}" onclick="event.stopPropagation()">
+        <div class="ico" style="--c:${GROUP_COLOR[g] || "var(--accent)"}">${icon}</div>
+        <div class="t"><h2>${esc(title)} <span class="badges"><span class="badge ${risk === "safe" ? "safe" : "warn"}">${risk === "safe" ? "Safe to delete" : "Review first"}</span></span></h2><div class="muted" style="font-size:13px">${esc(desc)} · ${items.length} item${items.length === 1 ? "" : "s"}</div></div>
+        <div class="sz">${size(total)}</div>${ICON.chev}</div>
+      <div class="card-body">${rows}${more}</div></div>`;
+  }).join("");
+  document.querySelectorAll("#tab-rec .card").forEach(syncGroupBox);
+}
+$("#tab-rec").addEventListener("click", (e) => {
+  const ex = e.target.closest("[data-expand]");
+  if (ex) { expanded.add(ex.dataset.expand); return renderRec(); }
+  const head = e.target.closest(".card-head");
+  if (head && !e.target.closest("input")) {
+    const card = head.parentElement;
+    card.classList.toggle("open");
+    card.classList.contains("open") ? openGroups.add(card.dataset.g) : openGroups.delete(card.dataset.g);
+  }
+});
+
+// ---------- apps ----------
+function avatar(a) {
+  const src = state.icons[a.id];
+  if (src) return `<img class="avatar" src="${src}" alt="">`;
+  return `<div class="avatar" style="background:${color(a.name)}">${esc(a.name.replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "?")}</div>`;
+}
+function appItem(a) { return { key: "a:" + a.id, action: "uninstall", id: a.id, title: a.name, size: a.size }; }
+function renderApps() {
+  const d = state.data;
+  const q = state.appQuery.toLowerCase();
+  let apps = d.apps.filter((a) => !q || a.name.toLowerCase().includes(q) || a.publisher.toLowerCase().includes(q));
+  const by = {
+    size: (a, b) => b.size - a.size,
+    last: (a, b) => (a.last_used || 0) - (b.last_used || 0),
+    name: (a, b) => a.name.localeCompare(b.name),
+    installed: (a, b) => (a.installed || 0) - (b.installed || 0),
+  }[state.appSort];
+  apps = apps.slice().sort(by);
+  const note = !d.admin ? '<div class="notice">Run DriveSweep as administrator to see when each app was last used.</div>' : "";
+  const rows = apps.map((a) => {
+    const key = register(appItem(a));
+    const last = a.last_used ? "Opened " + ago(a.last_used) : (a.prefetch ? "Not opened recently" : "Last opened: unknown");
+    const tags = [];
+    if (a.last_used && Date.now() / 1000 - a.last_used > 90 * DAY) tags.push('<span class="badge warn">Unused</span>');
+    if (a.kind === "store") tags.push('<span class="badge">Store app</span>');
+    if (a.moved_to) tags.push(`<span class="badge safe" title="${esc(a.moved_to)}">Moved to ${esc(a.moved_to.slice(0, 2))}</span>`);
+    const move = a.moved_to ? `<button class="small soft-accent" disabled title="Already on ${esc(a.moved_to)}">Moved</button>`
+      : a.kind === "store" ? `<button class="small soft-accent" data-move="${esc(a.id)}" title="Opens Windows Settings, where Store apps can be moved">Move</button>`
+      : a.location ? `<button class="small soft-accent" data-move="${esc(a.id)}" title="Move this app to another drive">Move</button>`
+      : `<button class="small soft-accent" disabled title="Install folder unknown or shared with other programs">Move</button>`;
+    return `<div class="row"><label style="display:flex">${check(key)}</label>${avatar(a)}
+      <div class="main"><div class="title"><span class="name">${esc(a.name)}</span>${tags.length ? `<span class="badges">${tags.join("")}</span>` : ""}</div>
+        <div class="sub ellipsis">${esc([a.publisher, a.version, a.installed ? "installed " + ago(a.installed) : ""].filter(Boolean).join(" · "))}</div></div>
+      <div class="when">${last}</div>
+      <div class="size">${a.size ? size(a.size) : "?"}</div>
+      <div class="acts wide">${a.location ? `<button class="ghost small" data-reveal="${esc(a.location)}" title="Show in File Explorer">${ICON.open}</button>` : ""}
+        ${move}<button class="small soft-danger" data-uninstall="${esc(key)}" title="Removes the app with its own uninstaller">Delete</button></div></div>`;
+  }).join("");
+  $("#tab-apps").innerHTML = `${note}<div class="toolbar">
+      <input type="search" id="appSearch" placeholder="Search apps" value="${esc(state.appQuery)}" style="width:260px">
+      <div class="grow"></div><span class="muted">Sort by</span>
+      <select id="appSort">${[["size", "Size"], ["last", "Least recently used"], ["name", "Name"], ["installed", "Oldest install"]].map(([v, l]) => `<option value="${v}" ${state.appSort === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+    <div class="card">${rows || '<div class="empty">No apps found on this drive.</div>'}</div>
+    ${d.other_apps ? `<div class="muted" style="font-size:13px">${d.other_apps} more apps are installed on other drives. Scan those drives to see them.</div>` : ""}`;
+  $("#appSearch").oninput = (e) => { state.appQuery = e.target.value; renderApps(); const s = $("#appSearch"); s.focus(); s.setSelectionRange(s.value.length, s.value.length); };
+  $("#appSort").onchange = (e) => { state.appSort = e.target.value; renderApps(); };
+}
+$("#tab-apps").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-uninstall]");
+  if (b) confirmRun([known.get(b.dataset.uninstall)]);
+});
+
+// ---------- move an app to another drive ----------
+async function openMove(appId) {
+  const app = state.data.apps.find((a) => a.id === appId);
+  if (app.kind === "store") return api().open_store_settings();
+  openDlg('<div class="dlg-body center" style="padding-bottom:24px"><div class="spinner"></div>Finding all of this app\'s files...</div>');
+  const plan = await api().move_plan(appId);
+  const close = '<div class="dlg-foot"><button class="primary" onclick="dlg.close()">OK</button></div>';
+  if (!plan.folders.length) {
+    return openDlg(`<div class="dlg-body"><h2>Can't move ${esc(app.name)}</h2><p class="muted">Its install folder is unknown or shared with other programs
+      (for example Steam games, which Steam can move itself under Settings › Storage).</p></div>${close}`);
+  }
+  if (!plan.drives.length) {
+    return openDlg(`<div class="dlg-body"><h2>No other drive to move to</h2><p class="muted">Apps can be moved to another internal drive formatted as NTFS.</p></div>${close}`);
+  }
+  const best = plan.drives.reduce((a, b) => (b.free > a.free ? b : a));
+  const drives = plan.drives.map((d) => `<label><input type="radio" name="mvDrive" value="${esc(d.path)}" ${d === best ? "checked" : ""}>
+      <div><b>${esc(d.label)} (${esc(d.path.replace("\\", ""))})</b><div class="muted" style="font-size:12px">${size(d.free)} free</div></div></label>`).join("");
+  const folders = plan.folders.map((f, i) => `<div class="row"><label style="display:flex"><input type="checkbox" data-mv="${i}" checked></label>
+      <div class="main"><div class="title"><span class="name">${esc(f.path.split("\\").pop())}</span><span class="badges"><span class="badge">${esc(f.kind)}</span></span></div>
+        <div class="sub mono ellipsis">${esc(f.path)}</div></div><div class="size">${size(f.size)}</div></div>`).join("");
+  openDlg(`<div class="dlg-body">
+      <h2>Move ${esc(app.name)} to another drive</h2>
+      <div class="muted" style="margin-top:6px">The files are copied to the new drive and checked, then removed from here. A link is left in the old
+        place, so the app, its shortcuts and its uninstaller keep working exactly as before.</div>
+      <div style="margin-top:16px;font-weight:600">Move to</div>
+      <div class="pick">${drives}</div>
+      <div style="margin-top:16px;font-weight:600">Folders to move</div>
+      <div class="dlg-list">${folders}</div>
+      ${plan.running.length ? `<div class="warnbox">${ICON.alert} Close <b>${esc(plan.running.join(", "))}</b> first (also from the system tray), or the move will stop safely without changing anything.</div>` : ""}
+    </div>
+    <div class="dlg-foot"><button onclick="dlg.close()">Cancel</button><button class="primary" id="mvGo"></button></div>`);
+  const picked = () => [...document.querySelectorAll("[data-mv]:checked")].map((b) => plan.folders[+b.dataset.mv]);
+  const update = () => {
+    const total = picked().reduce((a, f) => a + f.size, 0);
+    const drive = plan.drives.find((d) => d.path === document.querySelector("[name=mvDrive]:checked").value);
+    $("#mvGo").textContent = `Move ${size(total)} to ${drive.path.replace("\\", "")}`;
+    $("#mvGo").disabled = !total || total > drive.free;
+  };
+  $("#dlgContent").addEventListener("change", update);
+  update();
+  $("#mvGo").onclick = () => runMove(app, document.querySelector("[name=mvDrive]:checked").value, picked().map((f) => f.path));
+}
+
+async function runMove(app, drive, paths) {
+  dlg.dataset.busy = "1";
+  const from = state.drive.replace("\\", ""), to = drive.replace("\\", "");
+  const colors = ["var(--heat-1)", "var(--heat-2)", "var(--heat-3)", "var(--heat-4)", "var(--folder)", "#22c55e", "var(--heat-1)", "var(--heat-3)"];
+  const flyers = colors.map((c, i) => `<span class="fly" style="--d:${(i * 0.21).toFixed(2)}s;--y:${[-22, 8, -6, 20, -14, 12, 0, -26][i]}px;color:${c}">${ICON.file}</span>`).join("");
+  openDlg(`<div class="dlg-body center" style="padding-bottom:26px">
+    <h2>Moving ${esc(app.name)}</h2><div class="muted" id="jSub">Copying files from ${from} to ${to}</div>
+    <div class="lane" id="mvLane"><div class="dtile src">${ICON.drive}<span>${from}</span></div>
+      <div class="track">${flyers}</div><div class="dtile dst">${ICON.drive}<span>${to}</span></div></div>
+    <div class="pct grad" id="jPct">0%</div>
+    <div class="jobbar"><i id="jBar"></i></div>
+    <div class="muted" id="jNums">&nbsp;</div>
+    <div class="mono muted ellipsis" id="jPath" style="margin-top:4px">&nbsp;</div></div>`);
+  let done = false;
+  (async function poll() {
+    if (done) return;
+    const j = await api().job_status();
+    if (!done && j && j.steps !== undefined && $("#jBar")) {
+      const total = Math.max(1, j.total);
+      const removing = j.stage === "removing";
+      $("#mvLane").classList.toggle("removing", removing);
+      $("#jSub").textContent = removing ? `Removing the originals from ${from} to free the space` : `Copying files from ${from} to ${to}`;
+      // copying is most of the work, cleaning up the originals is the last stretch
+      setJob(Math.min(99, (Math.min(1, j.freed / total) * 0.8 + Math.min(1, j.removed / total) * 0.2) * 100),
+        removing ? `${size(j.removed)} of ${size(j.total)} removed from ${from}` : `${j.files.toLocaleString()} files · ${size(j.freed)} of ${size(j.total)} copied`,
+        j.current);
+    }
+    setTimeout(poll, 250);
+  })();
+  const r = await api().move_app(app.id, drive, paths);
+  done = true;
+  setJob(100, r.error ? "" : `${size(r.copied)} moved to ${to}`, "");
+  await tick(600);
+  delete dlg.dataset.busy;
+  const errors = (r.errors || []).map((e) => `<div class="row"><div class="main"><div class="title"><span class="name">${esc(e.path.split("\\").pop())}</span></div>
+      <div class="sub">${esc(e.reason)}</div></div></div>`).join("");
+  const ok = !r.error && (r.errors || []).length < paths.length;
+  openDlg(`<div class="dlg-body">
+      <div class="center">${r.error ? `<h2>${esc(r.error)}</h2>` : `<div class="muted">Space freed on this drive</div>
+        <div class="big" style="color:var(--safe)">${size(Math.max(r.freed, ok ? r.copied : 0))}</div>
+        <div class="muted">${ok ? `${esc(app.name)} now lives on ${esc(r.target)} and works as before.` : "Nothing was moved."}</div>`}</div>
+      ${errors ? `<h2 style="margin-top:18px">${ok ? "Some folders stayed" : "What went wrong"}</h2><div class="dlg-list">${errors}</div>` : ""}
+    </div><div class="dlg-foot"><button class="primary" onclick="dlg.close()">Done</button></div>`);
+  await loadOverview();
+}
+$("#tab-apps").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-move]");
+  if (b && !b.disabled) openMove(b.dataset.move);
+});
+
+// ---------- cache ----------
+function cacheItem(c) {
+  return c.id === "recycle" ? { key: "recycle", action: "recycle", title: "Empty Recycle Bin", size: c.size }
+    : { key: "c:" + c.id, action: "clear", id: c.id, title: c.name, size: c.size };
+}
+function renderCache() {
+  const cs = state.data.caches;
+  const total = cs.reduce((a, c) => a + c.size, 0);
+  const rows = cs.map((c) => {
+    const key = register(cacheItem(c));
+    return `<div class="row"><label style="display:flex">${check(key)}</label>
+      <div class="main"><div class="title">${esc(c.name)}</div><div class="sub">${esc(c.desc)}</div></div>
+      <div class="size">${size(c.size)}</div>
+      <div class="acts mid"><button class="small soft-danger" data-clear="${esc(key)}" ${c.size ? "" : "disabled"}>Delete</button></div></div>`;
+  }).join("");
+  $("#tab-cache").innerHTML = `<div class="toolbar"><div class="grow muted">Files in use (for example by an open browser) are skipped. Close apps first to clear everything.</div>
+      <button class="danger" id="clearAll" ${total ? "" : "disabled"}>Delete all · ${size(total)}</button></div>
+    <div class="card">${rows || '<div class="empty">No caches found on this drive.</div>'}</div>`;
+  $("#clearAll").onclick = () => confirmRun(cs.filter((c) => c.size).map(cacheItem));
+}
+$("#tab-cache").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-clear]");
+  if (b) confirmRun([known.get(b.dataset.clear)]);
+});
+
+// ---------- explore: expandable tree (like TreeSize) ----------
+const tree = { open: new Set(), cache: new Map(), limit: new Map() };
+const low = (p) => p.toLowerCase();
+function heat(pct) {  // how much of its parent folder an item takes
+  return pct >= 40 ? "var(--danger)" : pct >= 20 ? "#f97316" : pct >= 8 ? "#eab308" : "var(--accent)";
+}
+async function fetchFolder(path) {
+  const d = await api().list_folder(path);
+  tree.cache.set(low(path), d);
+  return d;
+}
+async function loadExplore(path) {
+  if (state.explorePath !== path) { tree.open.clear(); tree.limit.clear(); }
+  state.explorePath = path;
+  if (!tree.cache.has(low(path))) $("#tab-explore").innerHTML = '<div class="spinner"></div>';
+  // refetch the root and every expanded folder so sizes are current (e.g. after deleting)
+  await Promise.all([path, ...tree.open].map(fetchFolder));
+  renderTree();
+}
+function treeRows(path, depth) {
+  const d = tree.cache.get(low(path));
+  if (!d) return "";
+  const limit = tree.limit.get(low(path)) || 100;
+  let html = d.rows.slice(0, limit).map((r) => {
+    const it = { key: "p:" + low(r.path), action: "delete", path: r.path, title: r.name, size: r.size };
+    register(it);
+    const pct = d.size ? r.size / d.size * 100 : 0;
+    const open = r.dir && tree.open.has(low(r.path));
+    const stuck = r.protected && r.protected.startsWith("In use");
+    const b = [];
+    if (r.hidden) b.push('<span class="badge">Hidden</span>');
+    if (stuck) b.push(`<span class="badge warn" title="${esc(r.protected)}">In use, can't delete</span>`);
+    else if (r.protected) b.push(`<span class="badge" title="${esc(r.protected)}">Protected</span>`);
+    if (r.onedrive) b.push('<span class="badge">OneDrive</span>');
+    if (r.in_use.length && !r.protected) b.push(`<span class="badge warn">In use by ${esc(r.in_use[0])}</span>`);
+    const box = r.protected ? `<input type="checkbox" disabled title="${esc(r.protected)}">` : check(it.key);
+    const row = `<div class="trow ${r.dir ? "dir" : ""} ${stuck ? "dim" : ""}" ${r.dir ? `data-toggle="${esc(r.path)}" title="Click to expand, double-click to open"` : ""}>
+      <label class="tc">${box}</label>
+      <div class="tname" style="padding-left:${depth * 22}px">
+        <span class="twist ${open ? "open" : ""}">${r.dir && r.count ? ICON.chev : ""}</span>
+        <span class="ticon" style="color:${r.dir ? "#e8a33d" : "var(--muted)"}">${r.dir ? ICON.folder : ICON.file}</span>
+        <span class="name">${esc(r.name)}</span>${b.length ? `<span class="badges">${b.join("")}</span>` : ""}
+      </div>
+      <div class="tbar" title="${pct.toFixed(1)}% of ${esc(d.path)}"><i style="width:${Math.max(pct, 0.5)}%;background:${heat(pct)}"></i><span>${pct.toFixed(1)}%</span></div>
+      <div class="size">${size(r.size)}</div>
+      <div class="tnum">${r.dir ? r.count.toLocaleString() : ""}</div>
+      <div class="tnum">${r.modified ? ago(r.modified) : ""}</div>
+      <div class="acts">${r.dir ? `<button class="ghost small" data-go="${esc(r.path)}" title="Open this folder">${ICON.enter}</button>` : ""}
+        <button class="ghost small" data-reveal="${esc(r.path)}" title="Show in File Explorer">${ICON.open}</button></div>
+    </div>`;
+    return row + (open ? treeRows(r.path, depth + 1) : "");
+  }).join("");
+  if (d.rows.length > limit) {
+    html += `<div class="trow"><span></span><div style="padding-left:${depth * 22 + 26}px"><button class="ghost small" data-more="${esc(path)}">Show ${Math.min(100, d.rows.length - limit)} more of ${d.rows.length - limit} smaller items</button></div></div>`;
+  }
+  if (!d.rows.length && depth) html += `<div class="trow"><span></span><div class="muted" style="padding-left:${depth * 22 + 26}px">Empty or can't be read</div></div>`;
+  return html;
+}
+function renderTree() {
+  const path = state.explorePath;
+  const d = tree.cache.get(low(path));
+  const parts = path.replace(/\\$/, "").split("\\");
+  const crumbs = parts.map((p, i) => {
+    const full = parts.slice(0, i + 1).join("\\") + (i === 0 ? "\\" : "");
+    return `<button class="ghost" data-go="${esc(full)}">${esc(p)}</button>`;
+  }).join('<span class="muted">›</span>');
+  $("#tab-explore").innerHTML = `
+    <div class="toolbar"><div class="crumbs">${crumbs}</div><div class="grow"></div>
+      <div class="legend">
+        <span style="--c: var(--danger)">40%+</span><span style="--c: #f97316">20–40%</span>
+        <span style="--c: #eab308">8–20%</span><span style="--c: var(--accent)">under 8% of its folder</span></div></div>
+    <div class="card tree">
+      <div class="thead"><span></span><span>Name · ${size(d.size)}</span><span>Share of folder</span><span style="text-align:right">Size</span>
+        <span style="text-align:right">Files</span><span style="text-align:right">Changed</span><span></span></div>
+      ${treeRows(path, 0) || '<div class="empty">This folder is empty or can\'t be read.</div>'}
+    </div>`;
+}
+async function toggleFolder(path) {
+  const k = low(path);
+  if (tree.open.has(k)) tree.open.delete(k);
+  else {
+    tree.open.add(k);
+    if (!tree.cache.has(k)) {
+      document.querySelector(`[data-toggle="${CSS.escape(path)}"] .twist`)?.classList.add("loading");
+      await fetchFolder(path);
+    }
+  }
+  renderTree();
+}
+$("#tab-explore").addEventListener("click", (e) => {
+  if (e.target.closest("[data-reveal], input, label")) return;
+  const go = e.target.closest("[data-go]");
+  if (go) return loadExplore(go.dataset.go);
+  const more = e.target.closest("[data-more]");
+  if (more) { const k = low(more.dataset.more); tree.limit.set(k, (tree.limit.get(k) || 100) + 100); return renderTree(); }
+  const row = e.target.closest("[data-toggle]");
+  if (row) toggleFolder(row.dataset.toggle);
+});
+$("#tab-explore").addEventListener("dblclick", (e) => {
+  const row = e.target.closest("[data-toggle]");
+  if (row && !e.target.closest("button, input, label")) loadExplore(row.dataset.toggle);
+});
+
+// ---------- confirm / run / result ----------
+const dlg = $("#dlg");
+function openDlg(html) { $("#dlgContent").innerHTML = html; if (!dlg.open) dlg.showModal(); }
+dlg.addEventListener("cancel", (e) => { if (dlg.dataset.busy) e.preventDefault(); });
+
+async function confirmRun(items) {
+  items = items.filter(Boolean);
+  if (!items.length) return;
+  const total = items.reduce((a, i) => a + (i.size || 0), 0);
+  const paths = items.filter((i) => i.path).map((i) => i.path);
+  openDlg('<div class="dlg-body center"><div class="spinner"></div>Checking what is in use...</div>');
+  const warns = paths.length ? await api().check(paths) : [];
+  const apps = items.filter((i) => i.action === "uninstall");
+  const hib = items.some((i) => i.action === "hibernate");
+  const list = items.slice().sort((a, b) => b.size - a.size).map((i) =>
+    `<div class="row"><div class="main"><div class="title ellipsis">${esc(i.action === "uninstall" ? i.title + " (app)" : i.title)}</div>${i.path ? `<div class="sub mono ellipsis">${esc(i.path)}</div>` : ""}</div><div class="size">${size(i.size)}</div></div>`).join("");
+  const warnHtml = warns.map((w) => `<div class="warnbox"><b>${esc(w.path.split("\\").pop())}</b>: ${w.warnings.map(esc).join(" ")}</div>`).join("");
+  openDlg(`<div class="dlg-body">
+      <h2>Delete ${items.length === 1 ? "this" : "these " + items.length + " items"} permanently?</h2>
+      <div class="muted" style="margin-top:6px">Frees about <b style="color:var(--text)">${size(total)}</b>. Files are deleted for good; they <b>won't</b> go to the Recycle Bin.</div>
+      <div class="dlg-list">${list}</div>
+      ${apps.length ? `<div class="warnbox">${ICON.alert} Each program's own uninstaller will open. Follow its steps; afterwards DriveSweep looks for files it left behind.</div>` : ""}
+      ${hib ? `<div class="warnbox">Hibernation and Fast Startup will be turned off. Sleep still works. You can turn it back on with <span class="mono">powercfg /h on</span>.</div>` : ""}
+      ${warnHtml}
+    </div>
+    <div class="dlg-foot"><button id="dNo">Cancel</button><button class="danger" id="dYes">Delete ${size(total)}</button></div>`);
+  $("#dNo").onclick = () => dlg.close();
+  $("#dYes").onclick = () => run(items);
+}
+
+function setJob(pct, nums, path) {
+  $("#jBar").style.width = pct + "%";
+  $("#jPct").textContent = Math.floor(pct) + "%";
+  if (nums !== undefined) $("#jNums").textContent = nums;
+  if (path !== undefined) $("#jPath").textContent = path || " ";
+}
+const tick = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function run(items) {
+  dlg.dataset.busy = "1";
+  const total = items.reduce((a, i) => a + (i.size || 0), 0);
+  openDlg(`<div class="dlg-body" style="padding-bottom:26px">
+    <div class="jobhead"><div style="min-width:0"><h2>Cleaning up</h2><div class="muted ellipsis" id="jSub">Starting...</div></div>
+      <div class="pct grad" id="jPct">0%</div></div>
+    <div class="jobbar"><i id="jBar"></i></div>
+    <div class="muted" id="jNums">&nbsp;</div>
+    <div class="mono muted ellipsis" id="jPath" style="margin-top:4px">&nbsp;</div></div>`);
+  let done = false;
+  (async function poll() {
+    if (done) return;
+    const j = await api().job_status();
+    if (!done && j && j.steps !== undefined && $("#jBar")) {
+      // bytes deleted so far, or items finished (uninstalls, recycle bin) - whichever is further along
+      const byBytes = j.total ? j.freed / j.total : 0, byItems = j.steps ? j.step / j.steps : 0;
+      $("#jSub").textContent = j.label || "Cleaning...";
+      setJob(Math.min(99, Math.max(byBytes, byItems) * 100),
+        `${j.files.toLocaleString()} files · ${size(j.freed)}${j.total ? " of " + size(j.total) : ""} deleted`, j.current);
+    }
+    setTimeout(poll, 250);
+  })();
+  const payload = items.map(({ action, path, id, title, size: s }) => ({ action, path, id, title, size: s }));
+  const r = await api().execute(payload);
+  done = true;
+  setJob(100, `${r.files.toLocaleString()} files · ${size(Math.max(r.freed, r.counted))} deleted`, "");
+  $("#jSub").textContent = "Done";
+  await tick(500);
+  delete dlg.dataset.busy;
+  for (const i of items) sel.delete(i.key);
+  showResult(r);
+  await loadOverview();
+}
+
+function showResult(r) {
+  const skipped = r.skipped.map((s) => `<div class="row"><div class="main"><div class="sub mono ellipsis">${esc(s.path)}</div></div><div class="muted" style="font-size:12px;flex:none">${esc(s.reason)}</div></div>`).join("");
+  const left = r.leftovers.map((f, i) => `<div class="row"><label style="display:flex"><input type="checkbox" data-left="${i}" ${f.in_use.length ? "" : "checked"}></label>
+      <div class="main"><div class="title ellipsis">${esc(f.path.split("\\").pop())} <span class="muted" style="font-weight:400">from ${esc(f.app)}</span></div><div class="sub mono ellipsis">${esc(f.path)}</div></div>
+      <div class="size">${size(f.size)}</div></div>`).join("");
+  const freed = Math.max(r.freed, r.counted);
+  openDlg(`<div class="dlg-body">
+      <div class="center"><div class="muted">Space freed</div><div class="big" style="color:var(--safe)">${size(freed)}</div>
+        <div class="muted">${r.files.toLocaleString()} files deleted · ${size(r.drive.free)} free on this drive now</div></div>
+      ${r.skipped_count ? `<details><summary>${r.skipped_count.toLocaleString()} item${r.skipped_count === 1 ? " was" : "s were"} skipped because a program is using ${r.skipped_count === 1 ? "it" : "them"}. They're hidden from the lists now.</summary><div class="dlg-list">${skipped}</div></details>` : ""}
+      ${left ? `<h2 style="margin-top:18px">Leftover files found</h2><div class="muted" style="font-size:13px">The uninstalled programs left these behind.</div><div class="dlg-list">${left}</div>` : ""}
+    </div>
+    <div class="dlg-foot">${left ? '<button id="rDone">Keep them</button><button class="danger" id="rLeft">Delete leftovers</button>' : '<button class="primary" id="rDone">Done</button>'}</div>`);
+  $("#rDone").onclick = () => dlg.close();
+  if (left) $("#rLeft").onclick = () => {
+    const pick = [...document.querySelectorAll("[data-left]:checked")].map((b) => r.leftovers[+b.dataset.left]);
+    const items = pick.map((f) => ({ key: "p:" + f.path.toLowerCase(), action: "delete", path: f.path, title: f.path.split("\\").pop(), size: f.size }));
+    if (items.length) run(items); else dlg.close();
+  };
+}
+
+window.addEventListener("pywebviewready", loadDrives);
+</script>
+</body>
+</html>

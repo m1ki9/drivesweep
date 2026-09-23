@@ -1,0 +1,27 @@
+# Push a version tag (git tag v1.0.0 && git push origin v1.0.0) and GitHub builds DriveSweep.exe
+# and attaches it to a release, so people can download it from the Releases page.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build
+        run: ./build_desktop_app.ps1
+      - name: Test
+        run: python -m unittest discover tests
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/DriveSweep.exe
+          generate_release_notes: true
